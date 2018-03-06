@@ -3,7 +3,7 @@ const query = param =>
     if (param === 2) {
       console.log(`rejecting ${param} retry maybe?`);
       return reject({
-        errorMessage: 'Two is not supported',
+        errorMessage: 'Lorem ipsum',
         retryable: true
       });
     }
@@ -16,9 +16,9 @@ const query = param =>
       );
       resolve({
         Items: [...Array(param + 1).keys()],
-        LastEvaluatedKey: param === 1
+        LastEvaluatedKey: param === 7
       });
-    }, 1000);
+    }, 500);
   });
 
 const reducer = (promiseFactory, storeResult) => params => {
@@ -30,10 +30,10 @@ const reducer = (promiseFactory, storeResult) => params => {
         .then(_ => promiseFactory(param))
         .then(res => {
           storeResult(res.Items);
-          if (res.LastEvaluatedKey === true) leftOver.push(16);
+          if (res.LastEvaluatedKey === true) leftOver.push(param * 2);
         })
         .catch(err => {
-          if (err.retryable === true) leftOver.push(16);
+          if (err.retryable === true) leftOver.push(param + 1);
           else throw err;
         });
     }, Promise.resolve())
@@ -44,27 +44,26 @@ const result = [];
 const derHammer = reducer(query, result.push.bind(result));
 
 const allDates = Object.freeze([...Array(10).keys()]);
-const maxRetries = 8;
+const maxRetries = 5;
 
-[...Array(maxRetries).keys()]
+[...Array(maxRetries + 1).keys()]
   .reduce(
     (p, retry) =>
       p.then(x => {
-        if (retry === 0) {
-          console.log(`very first try...${x.length} remaining`);
-          return derHammer(x);
-        }
         if (x.length === 0) {
           return p;
         }
-        console.log(
-          `retry ${retry}, ${x.length} remaining after 500 millisecond`
-        );
+        console.log(`>> retry #${retry + 1}, ${x.length} remaining`);
         return new Promise(resolve => setTimeout(resolve, 500)).then(_ =>
           derHammer(x)
         );
       }),
-    Promise.resolve(allDates)
+    derHammer(allDates)
   )
+  .then(x => {
+    if (x.length !== 0) {
+      throw new Error('Giving up...FAILED');
+    }
+  })
   .then(_ => console.log(result))
-  .catch(err => console.log(err));
+  .catch(err => console.log(err.message));
