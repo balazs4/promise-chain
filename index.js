@@ -8,7 +8,12 @@ const query = param =>
       });
     }
     setTimeout(() => {
-      console.log(`resolving ${param}`);
+      const LastEvaluatedKey = param === 1;
+      console.log(
+        `resolving ${param} ${
+          LastEvaluatedKey === true ? 'pagination needed' : ''
+        }`
+      );
       resolve({
         Items: [...Array(param + 1).keys()],
         LastEvaluatedKey: param === 1
@@ -16,47 +21,50 @@ const query = param =>
     }, 1000);
   });
 
-const reducer = (promiseFactory, storeResult) => params =>
-  params.slice().reduce((prom, _) => {
-    const param = params.shift(); // remove the current item from the array
-    return prom
-      .then(_ => promiseFactory(param))
-      .then(res => {
-        storeResult(res.Items);
-        if (res.LastEvaluatedKey === true) params.push(10);
-      })
-      .catch(err => {
-        if (err.retryable === true)
-          params.push(9); // may should be pushed at the first index, if items are getting popped
-        else throw err;
-      });
-  }, Promise.resolve());
+const reducer = (promiseFactory, storeResult) => params => {
+  let leftOver = params.slice();
+  return params
+    .reduce((prom, param) => {
+      leftOver = leftOver.filter(x => x !== param);
+      return prom
+        .then(_ => promiseFactory(param))
+        .then(res => {
+          storeResult(res.Items);
+          if (res.LastEvaluatedKey === true) leftOver.push(16);
+        })
+        .catch(err => {
+          if (err.retryable === true) leftOver.push(16);
+          else throw err;
+        });
+    }, Promise.resolve())
+    .then(_ => leftOver);
+};
 
 const result = [];
 const derHammer = reducer(query, result.push.bind(result));
 
-const allDates = [...Array(5).keys()];
+const allDates = Object.freeze([...Array(10).keys()]);
 const maxRetries = 8;
 
 [...Array(maxRetries).keys()]
   .reduce(
     (p, retry) =>
-      p.then(_ => {
+      p.then(x => {
         if (retry === 0) {
-          console.log(`very first try...${allDates.length} remaining`);
-          return derHammer(allDates);
+          console.log(`very first try...${x.length} remaining`);
+          return derHammer(x);
         }
-        if (allDates.length === 0) {
+        if (x.length === 0) {
           return p;
         }
         console.log(
-          `retry ${retry}, ${allDates.length} remaining after 500 millisecond`
+          `retry ${retry}, ${x.length} remaining after 500 millisecond`
         );
         return new Promise(resolve => setTimeout(resolve, 500)).then(_ =>
-          derHammer(allDates)
+          derHammer(x)
         );
       }),
-    Promise.resolve()
+    Promise.resolve(allDates)
   )
   .then(_ => console.log(result))
   .catch(err => console.log(err));
